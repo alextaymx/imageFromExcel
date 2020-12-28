@@ -46,10 +46,20 @@ const sortCoordinates = (imageMeta) => {
 
 const getImageMeta = (imageXML) => {
   // xml to json
-  var jsonObj = fastXMLparser.parse(ab2str(imageXML), {
+  const imageXMLObj = fastXMLparser.parse(ab2str(imageXML), {
     ignoreAttributes: false,
   });
-  const imageMeta = jsonObj["xdr:wsDr"]["xdr:twoCellAnchor"].map((element) => {
+  const imageXMLObjFiltered = Array.isArray(
+    imageXMLObj["xdr:wsDr"]["xdr:twoCellAnchor"]
+  )
+    ? imageXMLObj["xdr:wsDr"]["xdr:twoCellAnchor"].filter(
+        (element) => element["xdr:pic"]
+      )
+    : imageXMLObj["xdr:wsDr"]["xdr:twoCellAnchor"]["xdr:pic"]
+    ? [imageXMLObj["xdr:wsDr"]["xdr:twoCellAnchor"]]
+    : [];
+  if (imageXMLObjFiltered.length === 0) return null;
+  const imageMeta = imageXMLObjFiltered.map((element) => {
     return {
       imageName: element["xdr:pic"]["xdr:nvPicPr"]["xdr:cNvPr"]["@_name"], // problematic with mandarin name
       imageRef: element["xdr:pic"]["xdr:blipFill"]["a:blip"][
@@ -95,7 +105,8 @@ const processFile = async (filename) => {
 
   // console.log(workbook._worksheets);
   console.log(filename.split(".").pop());
-  if (filename.split(".").pop() === "xls") {
+  console.time("execution");
+  if (filename.split(".").pop().toLowerCase() === "xls") {
     const xlsFile = fs.readFileSync(path.join(__dirname, filename));
     await libre.convert(xlsFile, "xlsx", undefined, (err, done) => {
       // await macam not working here
@@ -110,11 +121,13 @@ const processFile = async (filename) => {
       const imageXML = myFile["xl/drawings/drawing1.xml"]["_data"].getContent();
       // xml to json
       const imageMeta = getImageMeta(imageXML);
+      if (imageMeta === null) return;
       const sortedImageMeta = sortCoordinates(imageMeta);
       const sortedImageName = sortedImageMeta.map(
         (element) => element.imageRef
       );
       saveImage(myFile, sortedImageName);
+      console.timeEnd("execution");
     });
   } else {
     const myFile = XLSX.readFile(path.join(__dirname, filename), {
@@ -126,7 +139,8 @@ const processFile = async (filename) => {
     const sortedImageMeta = sortCoordinates(imageMeta);
     const sortedImageName = sortedImageMeta.map((element) => element.imageRef);
     saveImage(myFile, sortedImageName);
+    console.timeEnd("execution");
   }
 };
 
-processFile("sample.xlsx");
+processFile("2021-04_Banpresto_Oversea_Item_Pre_Order.xls");
