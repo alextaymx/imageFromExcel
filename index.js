@@ -12,9 +12,80 @@ const libre = require("libreoffice-convert");
 const XLSX = require("xlsx");
 const fs = require("fs");
 const FileType = require("file-type");
+var fastXMLparser = require("fast-xml-parser");
+
 // var xlsx = require("node-xlsx");
 
 // const ExcelJS = require("exceljs");
+const ab2str = (buf) => {
+  return String.fromCharCode.apply(null, new Uint16Array(buf));
+};
+
+const sortCoordinates = (imageMeta) => {
+  let assignedRow = 0;
+  let currentUB = 0;
+  let currentLB = 0;
+  const sortedImageMeta = imageMeta.sort((a, b) => {
+    return a.rowFrom - b.rowFrom;
+  });
+  for (let element of sortedImageMeta) {
+    if (element.rowFrom > currentUB || element.rowFrom < currentLB) {
+      assignedRow += 1;
+      midpoint = (element.rowTo - element.rowFrom) / 2;
+      currentUB = element.rowFrom + midpoint;
+      currentLB = element.rowFrom - midpoint;
+    }
+    element.rowGiven = assignedRow;
+  }
+  sortedImageMeta.sort((a, b) => {
+    return a.rowGiven - b.rowGiven || a.colFrom - b.colFrom;
+  });
+
+  return sortedImageMeta;
+};
+
+const getImageMeta = (imageXML) => {
+  // xml to json
+  var jsonObj = fastXMLparser.parse(ab2str(imageXML), {
+    ignoreAttributes: false,
+  });
+  const imageMeta = jsonObj["xdr:wsDr"]["xdr:twoCellAnchor"].map((element) => {
+    return {
+      imageName: element["xdr:pic"]["xdr:nvPicPr"]["xdr:cNvPr"]["@_name"], // problematic with mandarin name
+      imageRef: element["xdr:pic"]["xdr:blipFill"]["a:blip"][
+        "@_r:embed"
+      ].replace("rId", ""),
+      colFrom: element["xdr:from"]["xdr:col"],
+      rowFrom: element["xdr:from"]["xdr:row"],
+      colTo: element["xdr:to"]["xdr:col"],
+      rowTo: element["xdr:to"]["xdr:row"],
+    };
+  });
+  return imageMeta;
+};
+
+const saveImage = (myFile, sortedImageName) => {
+  Object.keys(myFile).forEach(async (elem, idx) => {
+    const currentFile = elem.split("/").pop().split("."); //name: 'xl/media/image1.jpeg'
+    const currentFileType = currentFile.pop();
+    if (["jpeg", "jpg", "png"].includes(currentFileType)) {
+      // console.log(myFile.files[elem]);
+      const arrayBuffer = myFile[elem]["_data"].getContent();
+      const buffer = Buffer.from(arrayBuffer);
+      const fileType = await FileType.fromBuffer(buffer); //png or jpeg
+      if (fileType.ext) {
+        const currentFileName = currentFile.pop().replace("image", "");
+        const orderedFileName = sortedImageName.indexOf(currentFileName) + 1;
+        const outputFileName = `image${orderedFileName}.${fileType.ext}`;
+        fs.createWriteStream(outputFileName).write(buffer);
+      } else {
+        console.log(
+          "File type could not be reliably determined! The binary data may be malformed! No file saved!"
+        );
+      }
+    }
+  });
+};
 
 const processFile = async (filename) => {
   // const workbook = new ExcelJS.Workbook();
@@ -33,32 +104,29 @@ const processFile = async (filename) => {
       }
       // "done" is the xlsx file which can be save or transfer in another stream
       fs.writeFileSync(path.join(__dirname, "generated.xlsx"), done);
+      const myFile = XLSX.readFile(path.join(__dirname, "generated.xlsx"), {
+        bookFiles: true,
+      }).files;
+      const imageXML = myFile["xl/drawings/drawing1.xml"]["_data"].getContent();
+      // xml to json
+      const imageMeta = getImageMeta(imageXML);
+      const sortedImageMeta = sortCoordinates(imageMeta);
+      const sortedImageName = sortedImageMeta.map(
+        (element) => element.imageRef
+      );
+      saveImage(myFile, sortedImageName);
     });
+  } else {
+    const myFile = XLSX.readFile(path.join(__dirname, filename), {
+      bookFiles: true,
+    }).files;
+    const imageXML = myFile["xl/drawings/drawing1.xml"]["_data"].getContent();
+    // xml to json
+    const imageMeta = getImageMeta(imageXML);
+    const sortedImageMeta = sortCoordinates(imageMeta);
+    const sortedImageName = sortedImageMeta.map((element) => element.imageRef);
+    saveImage(myFile, sortedImageName);
   }
-
-  const myFile = XLSX.readFile(path.join(__dirname, filename), {
-    bookFiles: true,
-  });
-
-  Object.keys(myFile.files).forEach(async (elem, idx) => {
-    const currentFile = elem.split("/").pop().split("."); //name: 'xl/media/image1.jpeg'
-    const currentFileType = currentFile.pop();
-    if (["jpeg", "jpg", "png"].includes(currentFileType)) {
-      // console.log(myFile.files[elem]);
-      const arrayBuffer = myFile.files[elem]["_data"].getContent();
-      const buffer = Buffer.from(arrayBuffer);
-      const fileType = await FileType.fromBuffer(buffer); //png or jpeg
-      if (fileType.ext) {
-        const currentFileName = currentFile.pop();
-        const outputFileName = `${currentFileName}.${fileType.ext}`;
-        fs.createWriteStream(outputFileName).write(buffer);
-      } else {
-        console.log(
-          "File type could not be reliably determined! The binary data may be malformed! No file saved!"
-        );
-      }
-    }
-  });
 };
 
-processFile("generated.xlsx");
+processFile("sample.xlsx");
