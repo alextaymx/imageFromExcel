@@ -13,18 +13,24 @@ const XLSX = require("xlsx");
 const fs = require("fs");
 const FileType = require("file-type");
 var fastXMLparser = require("fast-xml-parser");
-
 // var xlsx = require("node-xlsx");
-
 // const ExcelJS = require("exceljs");
+
 const ab2str = (buf) => {
   return String.fromCharCode.apply(null, new Uint16Array(buf));
 };
-
+const deleteFile = (fileArr) => {
+  fileArr.forEach((file) =>
+    fs.unlink(path.join(__dirname, file), (err) => {
+      if (err) throw err;
+    })
+  );
+  console.info("Deleted");
+};
 const sortCoordinates = (imageMeta) => {
   let assignedRow = 0;
-  let currentUB = 0;
-  let currentLB = 0;
+  let currentUB = -1;
+  let currentLB = -1;
   const sortedImageMeta = imageMeta.sort((a, b) => {
     return a.rowFrom - b.rowFrom;
   });
@@ -44,7 +50,7 @@ const sortCoordinates = (imageMeta) => {
   return sortedImageMeta;
 };
 
-const getImageMeta = (imageXML,imageCounter) => {
+const getImageMeta = (imageXML, imageCounter) => {
   // xml to json
   const imageXMLObj = fastXMLparser.parse(ab2str(imageXML), {
     ignoreAttributes: false,
@@ -61,10 +67,10 @@ const getImageMeta = (imageXML,imageCounter) => {
     ? [imageXMLObj["xdr:wsDr"]["xdr:twoCellAnchor"]]
     : [];
   if (imageXMLObjFiltered.length === 0) return null;
-  const imageMeta = imageXMLObjFiltered.map((element,index) => {
+  const imageMeta = imageXMLObjFiltered.map((element, index) => {
     return {
       imageName: element["xdr:pic"]["xdr:nvPicPr"]["xdr:cNvPr"]["@_name"], // problematic with mandarin name
-      imageRef: (imageCounter+index+1).toString(),
+      imageRef: (imageCounter + index + 1).toString(),
       colFrom: element["xdr:from"]["xdr:col"],
       rowFrom: element["xdr:from"]["xdr:row"],
       colTo: element["xdr:to"]["xdr:col"],
@@ -74,7 +80,8 @@ const getImageMeta = (imageXML,imageCounter) => {
   return imageMeta;
 };
 
-const saveImage = (myFile, sortedImageName,sheetNum) => {
+const saveImage = (myFile, sortedImageName, sheetNum, sheetName) => {
+  const toBeDeleted = [];
   Object.keys(myFile).forEach(async (elem, idx) => {
     const currentFile = elem.split("/").pop().split("."); //name: 'xl/media/image1.jpeg'
     const currentFileType = currentFile.pop();
@@ -85,10 +92,11 @@ const saveImage = (myFile, sortedImageName,sheetNum) => {
       const fileType = await FileType.fromBuffer(buffer); //png or jpeg
       if (fileType.ext) {
         const currentFileName = currentFile.pop().replace("image", "");
-        if(sortedImageName.includes(currentFileName)){
+        if (sortedImageName.includes(currentFileName)) {
           const orderedFileName = sortedImageName.indexOf(currentFileName) + 1;
-          const outputFileName = `image_${sheetNum}_${orderedFileName}.${fileType.ext}`;
+          const outputFileName = `${sheetNum}_${sheetName}_image_${orderedFileName}.${fileType.ext}`;
           fs.createWriteStream(outputFileName).write(buffer);
+          toBeDeleted.push(outputFileName);
         }
       } else {
         console.log(
@@ -97,27 +105,27 @@ const saveImage = (myFile, sortedImageName,sheetNum) => {
       }
     }
   });
+  setTimeout(() => deleteFile(toBeDeleted), 30000);
 };
 
-const core = (workBook) =>{
+const core = (workBook) => {
   const myFile = workBook.files;
   let imageCounter = 0;
-  console.log(workBook.SheetNames)
-  for(const [index,sheetName] of workBook.SheetNames.entries()){
-    if(!myFile[`xl/drawings/drawing${index+1}.xml`]) continue;
-    const imageXML = myFile[`xl/drawings/drawing${index+1}.xml`]["_data"].getContent();
+  console.log(workBook.SheetNames);
+  for (const [index, sheetName] of workBook.SheetNames.entries()) {
+    if (!myFile[`xl/drawings/drawing${index + 1}.xml`]) continue;
+    const imageXML = myFile[`xl/drawings/drawing${index + 1}.xml`][
+      "_data"
+    ].getContent();
     // xml to json
-    const imageMeta = getImageMeta(imageXML,imageCounter);
+    const imageMeta = getImageMeta(imageXML, imageCounter);
     if (imageMeta.length === 0) return;
     const sortedImageMeta = sortCoordinates(imageMeta);
-    const sortedImageName = sortedImageMeta.map(
-      (element) => element.imageRef
-    );
-    saveImage(myFile,sortedImageName,index);
-    imageCounter += sortedImageName.length
+    const sortedImageName = sortedImageMeta.map((element) => element.imageRef);
+    saveImage(myFile, sortedImageName, index, sheetName);
+    imageCounter += sortedImageName.length;
   }
-  
-}
+};
 
 const processFile = async (filename) => {
   // const workbook = new ExcelJS.Workbook();
@@ -129,18 +137,20 @@ const processFile = async (filename) => {
   console.log(filename.split(".").pop());
   console.time("execution");
   if (filename.split(".").pop().toLowerCase() === "xls") {
+    console.time("conversion using libreoffice");
     const xlsFile = fs.readFileSync(path.join(__dirname, filename));
     await libre.convert(xlsFile, "xlsx", undefined, (err, done) => {
       // await macam not working here
       if (err) {
         console.log(`Error converting file: ${err}`);
       }
+      console.timeEnd("conversion using libreoffice");
       // "done" is the xlsx file which can be save or transfer in another stream
       fs.writeFileSync(path.join(__dirname, "generated.xlsx"), done);
       const workBook = XLSX.readFile(path.join(__dirname, "generated.xlsx"), {
         bookFiles: true,
       });
-      
+
       core(workBook);
       console.timeEnd("execution");
     });
@@ -159,4 +169,7 @@ const processFile = async (filename) => {
   }
 };
 
-processFile("2021-4月Add13,_5月Add4_Candy_Toy_offer_pre-order_All_TS.xlsx");
+// processFile("2021-01_Tamagotchi_x_EVA_ver.2_Pre-order_(Mass_All)[1]-2.xls");
+// processFile("2021-05_Tamashii_Web_SHF-Pre_Order_Mass_TS.XLS");
+// processFile("bigSample.xlsx")
+processFile("sample.xlsx");
