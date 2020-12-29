@@ -108,13 +108,21 @@ const saveImage = (myFile, sortedImageName, sheetNum, sheetName) => {
   setTimeout(() => deleteFile(toBeDeleted), 30000);
 };
 
+const sheetContainImage = (sheetXml) =>{
+  const sheetXMLObj = fastXMLparser.parse(ab2str(sheetXml), {
+    ignoreAttributes: false,
+  });
+  return 'drawing' in sheetXMLObj['worksheet'];
+}
+
 const core = (workBook) => {
   const myFile = workBook.files;
   let imageCounter = 0;
-  console.log(workBook.SheetNames);
+  let currentDrawingXml = 0;
   for (const [index, sheetName] of workBook.SheetNames.entries()) {
-    if (!myFile[`xl/drawings/drawing${index + 1}.xml`]) continue;
-    const imageXML = myFile[`xl/drawings/drawing${index + 1}.xml`][
+    const sheetXml = myFile[`xl/worksheets/sheet${index + 1}.xml`]['_data'];
+    if (!sheetContainImage(sheetXml)) continue;
+    const imageXML = myFile[`xl/drawings/drawing${currentDrawingXml + 1}.xml`][
       "_data"
     ].getContent();
     // xml to json
@@ -124,6 +132,7 @@ const core = (workBook) => {
     const sortedImageName = sortedImageMeta.map((element) => element.imageRef);
     saveImage(myFile, sortedImageName, index, sheetName);
     imageCounter += sortedImageName.length;
+    currentDrawingXml ++ ;
   }
 };
 
