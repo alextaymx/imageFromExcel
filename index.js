@@ -44,11 +44,13 @@ const sortCoordinates = (imageMeta) => {
   return sortedImageMeta;
 };
 
-const getImageMeta = (imageXML) => {
+const getImageMeta = (imageXML,imageCounter) => {
   // xml to json
   const imageXMLObj = fastXMLparser.parse(ab2str(imageXML), {
     ignoreAttributes: false,
   });
+  // console.log(Buffer.from(imageXML).toString())
+  // console.log(imageXMLObj["xdr:wsDr"]["xdr:twoCellAnchor"])
   const imageXMLObjFiltered = Array.isArray(
     imageXMLObj["xdr:wsDr"]["xdr:twoCellAnchor"]
   )
@@ -59,12 +61,10 @@ const getImageMeta = (imageXML) => {
     ? [imageXMLObj["xdr:wsDr"]["xdr:twoCellAnchor"]]
     : [];
   if (imageXMLObjFiltered.length === 0) return null;
-  const imageMeta = imageXMLObjFiltered.map((element) => {
+  const imageMeta = imageXMLObjFiltered.map((element,index) => {
     return {
       imageName: element["xdr:pic"]["xdr:nvPicPr"]["xdr:cNvPr"]["@_name"], // problematic with mandarin name
-      imageRef: element["xdr:pic"]["xdr:blipFill"]["a:blip"][
-        "@_r:embed"
-      ].replace("rId", ""),
+      imageRef: (imageCounter+index+1).toString(),
       colFrom: element["xdr:from"]["xdr:col"],
       rowFrom: element["xdr:from"]["xdr:row"],
       colTo: element["xdr:to"]["xdr:col"],
@@ -74,7 +74,7 @@ const getImageMeta = (imageXML) => {
   return imageMeta;
 };
 
-const saveImage = (myFile, sortedImageName) => {
+const saveImage = (myFile, sortedImageName,sheetNum) => {
   Object.keys(myFile).forEach(async (elem, idx) => {
     const currentFile = elem.split("/").pop().split("."); //name: 'xl/media/image1.jpeg'
     const currentFileType = currentFile.pop();
@@ -85,9 +85,11 @@ const saveImage = (myFile, sortedImageName) => {
       const fileType = await FileType.fromBuffer(buffer); //png or jpeg
       if (fileType.ext) {
         const currentFileName = currentFile.pop().replace("image", "");
-        const orderedFileName = sortedImageName.indexOf(currentFileName) + 1;
-        const outputFileName = `image${orderedFileName}.${fileType.ext}`;
-        fs.createWriteStream(outputFileName).write(buffer);
+        if(sortedImageName.includes(currentFileName)){
+          const orderedFileName = sortedImageName.indexOf(currentFileName) + 1;
+          const outputFileName = `image_${sheetNum}_${orderedFileName}.${fileType.ext}`;
+          fs.createWriteStream(outputFileName).write(buffer);
+        }
       } else {
         console.log(
           "File type could not be reliably determined! The binary data may be malformed! No file saved!"
@@ -96,6 +98,28 @@ const saveImage = (myFile, sortedImageName) => {
     }
   });
 };
+
+const core = (workBook) =>{
+  const myFile = workBook.files;
+  let imageCounter = 0;
+  console.log(workBook.SheetNames)
+  for(const [index,sheetName] of workBook.SheetNames.entries()){
+    console.log(`xl/drawings/drawing${index+1}.xml`);
+    console.log(myFile[`xl/drawings/drawing${index+1}.xml`])
+    if(!myFile[`xl/drawings/drawing${index+1}.xml`]) continue;
+    const imageXML = myFile[`xl/drawings/drawing${index+1}.xml`]["_data"].getContent();
+    // xml to json
+    const imageMeta = getImageMeta(imageXML,imageCounter);
+    if (imageMeta.length === 0) return;
+    const sortedImageMeta = sortCoordinates(imageMeta);
+    const sortedImageName = sortedImageMeta.map(
+      (element) => element.imageRef
+    );
+    saveImage(myFile,sortedImageName,index);
+    imageCounter += sortedImageName.length
+  }
+  
+}
 
 const processFile = async (filename) => {
   // const workbook = new ExcelJS.Workbook();
@@ -115,32 +139,26 @@ const processFile = async (filename) => {
       }
       // "done" is the xlsx file which can be save or transfer in another stream
       fs.writeFileSync(path.join(__dirname, "generated.xlsx"), done);
-      const myFile = XLSX.readFile(path.join(__dirname, "generated.xlsx"), {
+      const workBook = XLSX.readFile(path.join(__dirname, "generated.xlsx"), {
         bookFiles: true,
-      }).files;
-      const imageXML = myFile["xl/drawings/drawing1.xml"]["_data"].getContent();
-      // xml to json
-      const imageMeta = getImageMeta(imageXML);
-      if (imageMeta === null) return;
-      const sortedImageMeta = sortCoordinates(imageMeta);
-      const sortedImageName = sortedImageMeta.map(
-        (element) => element.imageRef
-      );
-      saveImage(myFile, sortedImageName);
+      });
+      
+      core(workBook);
       console.timeEnd("execution");
     });
   } else {
-    const myFile = XLSX.readFile(path.join(__dirname, filename), {
+    const workBook = XLSX.readFile(path.join(__dirname, filename), {
       bookFiles: true,
-    }).files;
-    const imageXML = myFile["xl/drawings/drawing1.xml"]["_data"].getContent();
-    // xml to json
-    const imageMeta = getImageMeta(imageXML);
-    const sortedImageMeta = sortCoordinates(imageMeta);
-    const sortedImageName = sortedImageMeta.map((element) => element.imageRef);
-    saveImage(myFile, sortedImageName);
+    });
+    core(workBook);
+    // const imageXML = myFile["xl/drawings/drawing1.xml"]["_data"].getContent();
+    // // xml to json
+    // const imageMeta = getImageMeta(imageXML);
+    // const sortedImageMeta = sortCoordinates(imageMeta);
+    // const sortedImageName = sortedImageMeta.map((element) => element.imageRef);
+    // saveImage(myFile, sortedImageName);
     console.timeEnd("execution");
   }
 };
 
-processFile("2021-04_Banpresto_Oversea_Item_Pre_Order.xls");
+processFile("2021-4月Add13,_5月Add4_Candy_Toy_offer_pre-order_All_TS.xlsx");
