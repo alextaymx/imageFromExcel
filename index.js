@@ -104,8 +104,6 @@ const core = (workBook) =>{
   let imageCounter = 0;
   console.log(workBook.SheetNames)
   for(const [index,sheetName] of workBook.SheetNames.entries()){
-    console.log(`xl/drawings/drawing${index+1}.xml`);
-    console.log(myFile[`xl/drawings/drawing${index+1}.xml`])
     if(!myFile[`xl/drawings/drawing${index+1}.xml`]) continue;
     const imageXML = myFile[`xl/drawings/drawing${index+1}.xml`]["_data"].getContent();
     // xml to json
