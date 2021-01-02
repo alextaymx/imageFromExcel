@@ -20,6 +20,7 @@ const ab2str = (buf) => {
   return String.fromCharCode.apply(null, new Uint16Array(buf));
 };
 const deleteFile = (fileArr) => {
+  // fs.rmdirSync("./outputImages", { recursive: true });
   fileArr.forEach((file) =>
     fs.unlink(path.join(__dirname, file), (err) => {
       if (err) throw err;
@@ -81,6 +82,7 @@ const getImageMeta = (imageXML, imageCounter) => {
 };
 
 const saveImage = (myFile, sortedImageName, sheetNum, sheetName) => {
+  console.log(sortedImageName, sheetName);
   const toBeDeleted = [];
   Object.keys(myFile).forEach(async (elem, idx) => {
     const currentFile = elem.split("/").pop().split("."); //name: 'xl/media/image1.jpeg'
@@ -94,7 +96,10 @@ const saveImage = (myFile, sortedImageName, sheetNum, sheetName) => {
         const currentFileName = currentFile.pop().replace("image", "");
         if (sortedImageName.includes(currentFileName)) {
           const orderedFileName = sortedImageName.indexOf(currentFileName) + 1;
-          const outputFileName = `${sheetNum}_${sheetName}_image_${orderedFileName}.${fileType.ext}`;
+          const outputFileName = `./outputImages/${sheetNum}_${sheetName}_image_${orderedFileName}.${fileType.ext}`;
+          if (!fs.existsSync("outputImages")) {
+            fs.mkdirSync("outputImages");
+          }
           fs.createWriteStream(outputFileName).write(buffer);
           toBeDeleted.push(outputFileName);
         }
@@ -105,66 +110,121 @@ const saveImage = (myFile, sortedImageName, sheetNum, sheetName) => {
       }
     }
   });
-  setTimeout(() => deleteFile(toBeDeleted), 30000);
+  setTimeout(() => deleteFile(toBeDeleted), 10000);
 };
 
-const sheetContainImage = (sheetXml) =>{
+const sheetContainImage = (sheetXml) => {
   const sheetXMLObj = fastXMLparser.parse(ab2str(sheetXml), {
     ignoreAttributes: false,
   });
-  return 'drawing' in sheetXMLObj['worksheet'];
-}
+  return "drawing" in sheetXMLObj["worksheet"];
+};
 
 const core = (workBook) => {
   const myFile = workBook.files;
   let imageCounter = 0;
   let currentDrawingXml = 0;
+  const pendingList = [];
+  console.log(workBook.SheetNames);
   for (const [index, sheetName] of workBook.SheetNames.entries()) {
-    const sheetXml = myFile[`xl/worksheets/sheet${index + 1}.xml`]['_data'];
+    const sheetXml = myFile[`xl/worksheets/sheet${index + 1}.xml`]["_data"];
     if (!sheetContainImage(sheetXml)) continue;
     const imageXML = myFile[`xl/drawings/drawing${currentDrawingXml + 1}.xml`][
       "_data"
     ].getContent();
+    const barcodeCell = Object.keys(workBook.Sheets[sheetName]).find((cell) => {
+      if (workBook.Sheets[sheetName][cell]["w"])
+        return ["barcode"].includes(
+          workBook.Sheets[sheetName][cell]["w"].toLowerCase()
+        );
+    });
+
+    const minRow =
+      barcodeCell === undefined
+        ? -1
+        : parseInt(barcodeCell.match(/\d/g).join(""));
     // xml to json
     const imageMeta = getImageMeta(imageXML, imageCounter);
     if (imageMeta.length === 0) return;
-    const sortedImageMeta = sortCoordinates(imageMeta);
+    const imagesBelowTable = imageMeta.filter(
+      (element) => element.rowFrom > minRow
+    );
+    const sortedImageMeta = sortCoordinates(imagesBelowTable);
     const sortedImageName = sortedImageMeta.map((element) => element.imageRef);
-    saveImage(myFile, sortedImageName, index, sheetName);
+    // saveImage(myFile, sortedImageName, index, sheetName);
+    console.log(sortedImageName, index, sheetName);
+    pendingList.push({
+      index: index,
+      sheetName: sheetName,
+      sortedImageName: sortedImageName,
+    });
     imageCounter += sortedImageName.length;
-    currentDrawingXml ++ ;
+    currentDrawingXml++;
+  }
+  const targetedSheet = workBook.SheetNames.findIndex((element) =>
+    ["images", "image", "photo"].includes(element.toLowerCase())
+  );
+  console.log(pendingList, targetedSheet);
+  if (
+    targetedSheet > -1 &&
+    pendingList[targetedSheet] !== undefined &&
+    pendingList[targetedSheet].sortedImageName.length > 0
+  ) {
+    saveImage(
+      myFile,
+      pendingList[targetedSheet].sortedImageName,
+      pendingList[targetedSheet].index,
+      pendingList[targetedSheet].sheetName
+    );
+  } else if (
+    pendingList.length > 1 &&
+    pendingList[1].sortedImageName.length > 0
+  ) {
+    saveImage(
+      myFile,
+      pendingList[1].sortedImageName,
+      pendingList[1].index,
+      pendingList[1].sheetName
+    );
+  } else if (pendingList[0].sortedImageName.length > 0) {
+    saveImage(
+      myFile,
+      pendingList[0].sortedImageName,
+      pendingList[0].index,
+      pendingList[0].sheetName
+    );
   }
 };
 
-const processFile = async (filename) => {
+const processFile = async (fileBuffer) => {
   // const workbook = new ExcelJS.Workbook();
   // await workbook.xlsx.readFile(
   //   `C:\\Users\\user\\Documents\\GitHub\\ecom_excel\\sample.xlsx`
   // );
 
   // console.log(workbook._worksheets);
-  console.log(filename.split(".").pop());
   console.time("execution");
-  if (filename.split(".").pop().toLowerCase() === "xls") {
+  const fileType = await FileType.fromBuffer(fileBuffer);
+
+  console.log(fileType);
+  if (fileType.ext.toLowerCase() === "cfb") {
     console.time("conversion using libreoffice");
-    const xlsFile = fs.readFileSync(path.join(__dirname, filename));
-    await libre.convert(xlsFile, "xlsx", undefined, (err, done) => {
+    // const xlsFile = fs.readFileSync(path.join(__dirname, filename));
+    await libre.convert(fileBuffer, "xlsx", undefined, (err, done) => {
       // await macam not working here
       if (err) {
         console.log(`Error converting file: ${err}`);
       }
       console.timeEnd("conversion using libreoffice");
       // "done" is the xlsx file which can be save or transfer in another stream
-      fs.writeFileSync(path.join(__dirname, "generated.xlsx"), done);
-      const workBook = XLSX.readFile(path.join(__dirname, "generated.xlsx"), {
-        bookFiles: true,
-      });
-
+      // fs.writeFileSync(path.join(__dirname, "generated.xlsx"), done);
+      const workBook = XLSX.read(done, { type: "buffer", bookFiles: true });
       core(workBook);
       console.timeEnd("execution");
     });
-  } else {
-    const workBook = XLSX.readFile(path.join(__dirname, filename), {
+  } else if (fileType.ext.toLowerCase() === "xlsx") {
+    const workBook = XLSX.read(fileBuffer, {
+      type: "buffer",
       bookFiles: true,
     });
     core(workBook);
@@ -175,10 +235,13 @@ const processFile = async (filename) => {
     // const sortedImageName = sortedImageMeta.map((element) => element.imageRef);
     // saveImage(myFile, sortedImageName);
     console.timeEnd("execution");
-  }
+  } // else if pdf formats....
 };
 
 // processFile("2021-01_Tamagotchi_x_EVA_ver.2_Pre-order_(Mass_All)[1]-2.xls");
 // processFile("2021-05_Tamashii_Web_SHF-Pre_Order_Mass_TS.XLS");
 // processFile("bigSample.xlsx")
-processFile("sample.xlsx");
+const filename = "sample.xlsx";
+// const filename = "2021-05_Tamashii_Web_SHF-Pre_Order_Mass_TS.XLS";
+const fileBuffer = fs.readFileSync(path.join(__dirname, filename));
+processFile(fileBuffer);
