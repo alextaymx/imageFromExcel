@@ -13,28 +13,27 @@ app.listen(3000, function () {
 });
 
 // const filename = "2021-05_Tamashii_Web_SHF-Pre_Order_Mass_TS.XLS";
-const filename = "sample.xlsx";
+const filename = "bigSample.xlsx";
 const fileBuffer = fs.readFileSync(path.join(__dirname, filename));
 processFileMain(fileBuffer);
 
+// processFileMain(
+//   fs.readFileSync(
+//     path.join(__dirname, "2021-05_Tamashii_Web_SHF-Pre_Order_Mass_TS.XLS")
+//   )
+// );
 
-processFileMain(
-  fs.readFileSync(
-    path.join(__dirname, "2021-05_Tamashii_Web_SHF-Pre_Order_Mass_TS.XLS")
-  )
-);
-
-processFileMain(
-  fs.readFileSync(
-    path.join(
-      __dirname,
-      "2021-01_Tamagotchi_x_EVA_ver.2_Pre-order_(Mass_All)[1]-2.xls"
-    )
-  )
-);
-processFileMain(fs.readFileSync(path.join(__dirname, "bigSample.xlsx")));
-processFileMain(
-  fs.readFileSync(
-    path.join(__dirname, "2021-05_Tamashii_Web_SHF-Pre_Order_Mass_TS.XLS")
-  )
-);
+// processFileMain(
+//   fs.readFileSync(
+//     path.join(
+//       __dirname,
+//       "2021-01_Tamagotchi_x_EVA_ver.2_Pre-order_(Mass_All)[1]-2.xls"
+//     )
+//   )
+// );
+// processFileMain(fs.readFileSync(path.join(__dirname, "bigSample.xlsx")));
+// processFileMain(
+//   fs.readFileSync(
+//     path.join(__dirname, "2021-05_Tamashii_Web_SHF-Pre_Order_Mass_TS.XLS")
+//   )
+// );

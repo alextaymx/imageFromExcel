@@ -17,7 +17,12 @@ module.exports.processFileMain = async (fileBuffer) => {
       } else {
         // "done" is the xlsx file which can be save or transfer in another stream
         // fs.writeFileSync(path.join(__dirname, "generated.xlsx"), done);
-        const workBook = XLSX.read(done, { type: "buffer", bookFiles: true });
+        const workBook = XLSX.read(done, {
+          type: "buffer",
+          bookFiles: true,
+          cellDates: true,
+          cellHTML: true,
+        });
         core(workBook);
         console.timeEnd(`execution code ${randNum}`);
       }
@@ -26,6 +31,8 @@ module.exports.processFileMain = async (fileBuffer) => {
     const workBook = XLSX.read(fileBuffer, {
       type: "buffer",
       bookFiles: true,
+      cellDates: true,
+      cellHTML: true,
     });
     core(workBook);
     console.timeEnd(`execution code ${randNum}`);

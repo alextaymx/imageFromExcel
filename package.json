@@ -20,6 +20,7 @@
     "xlsx": "^0.16.9"
   },
   "devDependencies": {
-    "nodemon": "^2.0.6"
+    "nodemon": "^2.0.6",
+    "ts-migrate": "^0.1.13"
   }
 }
