@@ -3,7 +3,7 @@ const {saveImage} = require("./saveImage");
 const {getImageMeta} = require("./getImageMeta");
 const {sheetContainImage} = require("./isSheetContainImage");
 
-module.exports.core = (workBook) => {
+module.exports.core = (workBook: any) => {
     const myFile = workBook.files;
     let currentDrawingXml = 0;
     const pendingList = [];
@@ -27,15 +27,16 @@ module.exports.core = (workBook) => {
       const minRow =
         barcodeCell === undefined
           ? -1
-          : parseInt(barcodeCell.match(/\d/g).join(""));
+          : // @ts-expect-error ts-migrate(2531) FIXME: Object is possibly 'null'.
+            parseInt(barcodeCell.match(/\d/g).join(""));
       // xml to json
       const imageMeta = getImageMeta(imageXML, imageRelXml);
       if (imageMeta.length === 0) return;
       const imagesBelowTable = imageMeta.filter(
-        (element) => element.rowFrom > minRow
+        (element: any) => element.rowFrom > minRow
       );
       const sortedImageMeta = sortCoordinates(imagesBelowTable);
-      const sortedImageName = sortedImageMeta.map((element) => element.imageRef);
+      const sortedImageName = sortedImageMeta.map((element: any) => element.imageRef);
       // saveImage(myFile, sortedImageName, index, sheetName);
       pendingList.push({
         index: index,
@@ -44,8 +45,7 @@ module.exports.core = (workBook) => {
       });
       currentDrawingXml++;
     }
-    const targetedSheet = workBook.SheetNames.findIndex((element) =>
-      ["images", "image", "photo"].includes(element.toLowerCase())
+    const targetedSheet = workBook.SheetNames.findIndex((element: any) => ["images", "image", "photo"].includes(element.toLowerCase())
     );
     if (
       targetedSheet > -1 &&

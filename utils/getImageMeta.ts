@@ -1,6 +1,8 @@
+// @ts-expect-error ts-migrate(2451) FIXME: Cannot redeclare block-scoped variable 'fastXMLpar... Remove this comment to see the full error message
 const fastXMLparser = require("fast-xml-parser");
+// @ts-expect-error ts-migrate(2451) FIXME: Cannot redeclare block-scoped variable 'ab2str'.
 const {ab2str} = require("./ab2str")
-module.exports.getImageMeta = (imageXML, imageRelXml) => {
+module.exports.getImageMeta = (imageXML: any, imageRelXml: any) => {
     // xml to json
     const imageXMLObj = fastXMLparser.parse(ab2str(imageXML), {
       ignoreAttributes: false,

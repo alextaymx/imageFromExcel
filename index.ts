@@ -1,10 +1,12 @@
 var express = require("express");
 var app = express();
 const { processFileMain } = require("./processFileMain");
+// @ts-expect-error ts-migrate(2451) FIXME: Cannot redeclare block-scoped variable 'path'.
 const path = require("path");
+// @ts-expect-error ts-migrate(2451) FIXME: Cannot redeclare block-scoped variable 'fs'.
 const fs = require("fs");
 
-app.get("/", function (req, res) {
+app.get("/", function (req: any, res: any) {
   res.send("Hello World!");
 });
 

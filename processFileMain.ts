@@ -1,16 +1,17 @@
+// @ts-expect-error ts-migrate(2451) FIXME: Cannot redeclare block-scoped variable 'FileType'.
 const FileType = require("file-type");
 const { core } = require("./utils/core");
 const libre = require("libreoffice-convert");
 const XLSX = require("xlsx");
 
-module.exports.processFileMain = async (fileBuffer) => {
+module.exports.processFileMain = async (fileBuffer: any) => {
   const randNum = Math.floor(Math.random() * 1000) + 1; //console.time requires unique id
   console.time(`execution code ${randNum}`);
   const fileType = await FileType.fromBuffer(fileBuffer);
 
   if (fileType.ext.toLowerCase() === "cfb") {
     console.time(`converted by libreoffice code ${randNum}`);
-    libre.convert(fileBuffer, "xlsx", undefined, (err, done) => {
+    libre.convert(fileBuffer, "xlsx", undefined, (err: any, done: any) => {
       console.timeEnd(`converted by libreoffice code ${randNum}`);
       if (err) {
         console.log(`Error converting file: ${err}`);
