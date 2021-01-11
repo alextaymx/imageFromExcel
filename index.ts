@@ -1,10 +1,9 @@
-var express = require("express");
-var app = express();
-const { processFileMain } = require("./processFileMain");
-// @ts-expect-error ts-migrate(2451) FIXME: Cannot redeclare block-scoped variable 'path'.
-const path = require("path");
-// @ts-expect-error ts-migrate(2451) FIXME: Cannot redeclare block-scoped variable 'fs'.
-const fs = require("fs");
+import { processFileMain } from "./processFileMain";
+import express from "express";
+import * as path from "path";
+import * as fs from "fs";
+const app = express();
+// const { processFileMain } = require("./processFileMain");
 
 app.get("/", function (req: any, res: any) {
   res.send("Hello World!");
@@ -15,7 +14,7 @@ app.listen(3000, function () {
 });
 
 // const filename = "2021-05_Tamashii_Web_SHF-Pre_Order_Mass_TS.XLS";
-const filename = "bigSample.xlsx";
+const filename = "generated.xlsx";
 const fileBuffer = fs.readFileSync(path.join(__dirname, filename));
 processFileMain(fileBuffer);
 
